@@ -7,12 +7,7 @@ type Coord struct {
 	X int `json:"x"`
 	Y int `json:"y"`
 }
-type Directions struct {
-	up    bool
-	down  bool
-	left  bool
-	right bool
-}
+
 type Battlesnake struct {
 	ID             string         `json:"id"`
 	Name           string         `json:"name"`

@@ -1,78 +1,157 @@
 package main
 
+import (
+	"log"
+	"slices"
+)
+
+var FirstLevelMoves = []MoveCheck{
+	MoveBackwards,
+	MoveWithinBoard,
+	MoveOntoSnake,
+}
+
 type MoveChecker interface {
 	process() Directions
+	Weight() float32
+	SetWeight() float32
 }
 
-type MoveCheck func() Directions
-
-func (mc MoveCheck) process() Directions {
-	return mc()
+type MoveResult struct {
+	move *WeightedMove
+	dir  Directions
 }
 
-func (s *snake) OneDimensionalCheck(c *Coord, d *Directions) {
-	if s.Head.X-1 == c.X {
-		d.left = false
-	}
-	if s.Head.X+1 == c.X {
-		d.right = false
-	}
-	if s.Head.Y-1 == c.Y {
-		d.down = false
-	}
-	if s.Head.Y+1 == c.Y {
-		d.up = false
-	}
+type WeightedMove struct {
+	move   MoveCheck
+	weight float32
 }
 
-func (s *snake) MoveBackwards(gs *GameState) Directions {
-	d := Directions{}
-	// using switch because each case is mutually exclusive - ie, can't have neck be below and left of head
-	s.OneDimensionalCheck(&s.Neck, &d)
+func (w *WeightedMove) process(s *snake, gs *GameState) Directions {
+	return w.move(s, gs)
+}
+
+func (w *WeightedMove) Weight() float32 {
+	return w.weight
+}
+
+func (w *WeightedMove) SetWeight(wt float32) {
+	w.weight = wt
+}
+
+type MoveCheck func(s *snake, gs *GameState) Directions
+
+func (mc MoveCheck) process(s *snake, gs *GameState) Directions {
+	return mc(s, gs)
+}
+
+func MoveFloodFill(s *snake, gs *GameState) Directions {
+	d := NewDirections()
+	gb := NewGameBoard(gs)
+
+	for move := range s.SafeMoves {
+		visited := make(map[Coord]bool)
+		nextCoord := MoveCoordinate[move](s.Head)
+		flood := FloodFill(nextCoord, gb, gs, 5, visited)
+		d[move] = float32(flood)
+	}
+	d.Normalize()
+	name, val := d.Max()
+	log.Printf("Flood fill recommends [%s] at strength [%f]\n", name, val)
 	return d
 }
 
-func (s *snake) MoveWithinBoard(gs *GameState) Directions {
-	d := Directions{}
-	if s.Head.X == 0 {
-		d.left = false
+func MoveToClosestFood(s *snake, gs *GameState) Directions {
+	d := NewDirections()
+	gb := NewGameBoard(gs)
+	modified := map[string]bool{"up": false, "left": false, "right": false, "down": false}
+	type foodPath struct {
+		distance int
+		path     []Coord
 	}
-	if s.Head.X == gs.Board.Width-1 {
-		d.right = false
+	foodPaths := make([]foodPath, 0)
+	// first, find all the possible paths to food
+	for _, foodPos := range gs.Board.Food {
+		paths := GetAStar(*s.Head, foodPos, gb, gs)
+		for _, p := range paths {
+			distance := len(p)
+			if distance > 0 {
+				foodPaths = append(foodPaths, foodPath{distance, p})
+			}
+		}
+
 	}
-	if s.Head.Y == 0 {
-		d.down = false
+	// early return if empty
+	if len(foodPaths) == 0 {
+		return d
 	}
-	if s.Head.Y == gs.Board.Height-1 {
-		d.up = false
+
+	// I wanted to write  a SortFunc. This seems more obtuse than a loop in this case.
+	slices.SortFunc(foodPaths, func(a, b foodPath) int {
+		if a.distance < b.distance {
+			return -1
+		}
+		if a.distance > b.distance {
+			return 1
+		}
+		return 0
+	})
+
+	for move := range s.SafeMoves {
+		nextCoord := MoveCoordinate[move](s.Head)
+		for i, fp := range foodPaths {
+			if fp.path[0] == nextCoord {
+				d[move] += float32(i * fp.distance)
+				modified[move] = true
+			}
+		}
 	}
+	d.Modified(modified)
+	d.Normalize()
+
+	name, val := d.Max()
+	log.Printf("Closest food recommends [%s] at strength [%f]\n", name, val)
 	return d
 }
 
-func (s *snake) MoveOntoSnake(gs *GameState) Directions {
-	d := Directions{}
-	adjacent := map[Coord]bool{}
-	for _, enemy := range gs.Board.Snakes {
-		// skip myself
-		if enemy.ID == s.Data.ID {
-			continue
-		}
-		for _, cell := range enemy.Body {
-			adjacent[cell] = true
-		}
+func MoveBackwards(s *snake, gs *GameState) Directions {
+	d := NewDirections()
+	if s.Length < 2 {
+		return d
 	}
 
-	if adjacent[Coord{s.Head.X - 1, s.Head.Y}] {
-		d.left = false
+	for dir := range d {
+		nextCoord := MoveCoordinate[dir](s.Head)
+		if nextCoord == *s.Neck {
+			d[dir] = 0
+		}
 	}
-	if adjacent[Coord{s.Head.X + 1, s.Head.Y}] {
-		d.right = false
+	logUnsafe("move into neck", d)
+	return d
+}
+
+func MoveWithinBoard(s *snake, gs *GameState) Directions {
+	d := NewDirections()
+	for dir := range d {
+		nextCoord := MoveCoordinate[dir](s.Head)
+		if CheckOutOfBounds(nextCoord, nil, gs) {
+			d[dir] = 0
+		}
 	}
-	if adjacent[Coord{s.Head.X, s.Head.Y - 1}] {
-		d.down = false
+	logUnsafe("board", d)
+	return d
+}
+
+func MoveOntoSnake(s *snake, gs *GameState) Directions {
+	d := NewDirections()
+	gb := NewGameBoard(gs)
+
+	for dir := range d {
+		nextCoord := MoveCoordinate[dir](s.Head)
+		if CheckSnake(nextCoord, gb, gs) {
+			d[dir] = 0
+		}
 	}
-	if adjacent[Coord{s.Head.X, s.Head.Y + 1}] {
-		d.up = false
-	}
+	logUnsafe("snake: ", d)
 	return d
 }
