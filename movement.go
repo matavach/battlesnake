@@ -99,15 +99,16 @@ func MoveToClosestFood(s *snake, gs *GameState) Directions {
 
 	for move := range s.SafeMoves {
 		nextCoord := MoveCoordinate[move](s.Head)
-		for i, fp := range foodPaths {
+		for _, fp := range foodPaths {
 			if fp.path[0] == nextCoord {
-				d[move] += float32(i * fp.distance)
+				adj := float32(1 / float32(fp.distance))
+				d[move] /= adj
 				modified[move] = true
 			}
 		}
 	}
 	d.Modified(modified)
-	d.Normalize()
+	d.InverseNormalize()
 
 	name, val := d.Max()
 	log.Printf("Closest food recommends [%s] at strength [%f]\n", name, val)

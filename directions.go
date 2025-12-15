@@ -42,14 +42,19 @@ func (d Directions) Normalize() {
 }
 
 func (d Directions) InverseNormalize() {
-	var _, minVal = d.Min()
+	var highest float32
+	var mult float32
 	for dir, value := range d {
-		if minVal > 0 && value > 0 {
-			d[dir] = minVal / value
-		} else {
-
+		if value == 0 {
+			d[dir] = 0
+			continue
 		}
-
+		new := 1.0 / value
+		if new > highest {
+			highest = new
+			mult = 1 / highest
+		}
+		d[dir] = mult * new
 	}
 }
 
