@@ -1,0 +1,39 @@
+name: Build and Push to ACR
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+
+env:
+  REGISTRY_NAME: myregistry  # Change this to your ACR name
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Login to ACR
+      run: |
+        az acr login --name ${{ env.REGISTRY_NAME }}
+
+    - name: Build Docker image
+      run: |
+        docker build -t ${{ env.REGISTRY_NAME }}.azurecr.io/battlesnake:${{ github.sha }} .
+        docker build -t ${{ env.REGISTRY_NAME }}.azurecr.io/battlesnake:latest .
+
+    - name: Push to ACR
+      run: |
+        docker push ${{ env.REGISTRY_NAME }}.azurecr.io/battlesnake:${{ github.sha }}
+        docker push ${{ env.REGISTRY_NAME }}.azurecr.io/battlesnake:latest
+
+    - name: Image pushed
+      run: |
+        echo "Image pushed: ${{ env.REGISTRY_NAME }}.azurecr.io/battlesnake:${{ github.sha }}"

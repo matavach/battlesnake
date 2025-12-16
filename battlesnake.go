@@ -7,7 +7,6 @@ type Config struct {
 	MaxWorkers int8
 }
 
-var snakey = snake{}
 var turn int
 
 func main() {
@@ -31,8 +30,6 @@ func info() BattlesnakeInfoResponse {
 
 func start(gs *GameState) {
 	log.Println("GAME START")
-
-	snakey, _ = NewSnake(&gs.You)
 }
 
 func end(gs *GameState) {
@@ -43,9 +40,10 @@ func end(gs *GameState) {
 func move(gs *GameState) BattlesnakeMoveResponse {
 	log.Printf("TURN %d:\n", gs.Turn)
 	response := BattlesnakeMoveResponse{}
-	snakey.UpdateSnake(&gs.You)
-	snakey.findFirstLevelMoves(gs)
-	snakey.findSecondLevelMoves(gs)
+	gi := NewGameInstace(gs)
+	snakey, _ := NewSnake(&gi.You)
+	snakey.findFirstLevelMoves(&gi)
+	snakey.findSecondLevelMoves(&gi)
 	response.Move = snakey.NextMove
 	log.Printf("MOVING: %s\n", response.Move)
 	return response

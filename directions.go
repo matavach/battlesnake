@@ -74,3 +74,9 @@ func (d Directions) Modified(m map[string]bool) {
 		}
 	}
 }
+
+func (d Directions) ApplyWeight(w float32) {
+	for dir, value := range d {
+		d[dir] = float32(value / w)
+	}
+}
