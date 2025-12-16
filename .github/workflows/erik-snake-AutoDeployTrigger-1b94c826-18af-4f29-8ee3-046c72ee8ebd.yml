@@ -1,0 +1,49 @@
+name: Trigger auto deployment for erik-snake
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ main ]
+    paths:
+    - '**'
+    - '.github/workflows/erik-snake-AutoDeployTrigger-1b94c826-18af-4f29-8ee3-046c72ee8ebd.yml'
+
+  # Allow manual trigger 
+  workflow_dispatch:      
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions: 
+      id-token: write #This is required for requesting the OIDC JWT Token
+      contents: read #Required when GH token is used to authenticate with private repo
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.ERIKSNAKE_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.ERIKSNAKE_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.ERIKSNAKE_AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push container image to registry
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          _dockerfilePathKey_: _dockerfilePath_
+          _targetLabelKey_: _targetLabel_
+          registryUrl: erikregistry.azurecr.io
+          registryUsername: ${{ secrets.ERIKSNAKE_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.ERIKSNAKE_REGISTRY_PASSWORD }}
+          containerAppName: erik-snake
+          resourceGroup: DefaultResourceGroup-NCUS
+          imageToBuild: erikregistry.azurecr.io/erik-snake:${{ github.sha }}
+          _buildArgumentsKey_: |
+            _buildArgumentsValues_
+
+
