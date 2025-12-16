@@ -151,3 +151,49 @@ func MoveOntoSnake(s *snake, gi *GameInstance) (Directions, float32) {
 	logUnsafe("snake: ", d)
 	return d, weight
 }
+
+func MoveHeadToHeadCollision(s *snake, gi *GameInstance) (Directions, float32) {
+	d := NewDirections()
+	var weight float32 = 1.0
+	modified := map[string]bool{"up": false, "left": false, "right": false, "down": false}
+
+	for move := range s.SafeMoves {
+		nextCoord := MoveCoordinate[move](s.Head)
+		collisionWeight := float32(1.0)
+
+		for _, otherSnake := range gi.Snakes {
+			if otherSnake.ID == gi.You.ID {
+				continue
+			}
+
+			for _, otherDir := range []string{"up", "down", "left", "right"} {
+				otherNextCoord := MoveCoordinate[otherDir](&otherSnake.Head)
+
+				if nextCoord == otherNextCoord {
+					if s.Length > otherSnake.Length {
+						collisionWeight = 2.0
+						weight = 0.8
+					} else if s.Length < otherSnake.Length {
+						collisionWeight = 0.1
+						weight = 1.0
+					} else {
+						collisionWeight = 0.3
+						weight = 0.9
+					}
+				}
+			}
+		}
+
+		d[move] = collisionWeight
+		if collisionWeight != 1.0 {
+			modified[move] = true
+		}
+	}
+
+	d.Modified(modified)
+	d.Normalize()
+
+	name, val := d.Max()
+	log.Printf("MoveHeadToHeadCollision: [%s] strength [%f]\n", name, val)
+	return d, weight
+}

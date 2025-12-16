@@ -35,6 +35,7 @@ func NewSnake(bs *Battlesnake) (snake, error) {
 		SecondLevel: []MoveCheck{
 			MoveFloodFill,
 			MoveToClosestFood,
+			MoveHeadToHeadCollision,
 		},
 	}
 	return s, nil
