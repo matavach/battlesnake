@@ -6,7 +6,7 @@ on:
     tags: [ 'v*' ]
 
 env:
-  REGISTRY_NAME: myregistry  # Change this to your ACR name
+  REGISTRY_NAME: erikregistry  # Your ACR registry name
 
 jobs:
   build:
@@ -18,7 +18,8 @@ jobs:
     - name: Login to Azure
       uses: azure/login@v1
       with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        creds: ${{ secrets.ERIKSNAKE_AZURE_CREDENTIALS }}
+
 
     - name: Login to ACR
       run: |
