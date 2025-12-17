@@ -175,3 +175,16 @@ func ManhattanDistance(a, b Coord) int {
 	}
 	return dx + dy
 }
+
+func LongestEnemy(gi *GameInstance) Battlesnake {
+	var longest int = 0
+	enemy := Battlesnake{}
+
+	for _, s := range gi.Snakes {
+		if s.Length > longest {
+			longest = s.Length
+			enemy = s
+		}
+	}
+	return enemy
+}

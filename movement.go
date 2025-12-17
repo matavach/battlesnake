@@ -25,36 +25,77 @@ func (m *MoveResult) SetWeight(wt float32) {
 	m.weight = wt
 }
 
-func MoveFloodFill(s *snake, gi *GameInstance) (Directions, float32) {
+func MoveFloodFillWide(s *snake, gi *GameInstance) (Directions, float32) {
 	floodResults := make(map[string]int)
 	d := NewDirections()
-	var weight float32 = 0.5
+	smallestFlood := 0
+	var weight float32 = 0.6
 	for move := range s.SafeMoves {
 		visited := make(map[Coord]bool)
 		nextCoord := MoveCoordinate[move](s.Head)
-		flood := FloodFill(nextCoord, gi, 10, visited)
+		flood := FloodFill(nextCoord, gi, 20, visited)
 		floodResults[move] = flood
+		if smallestFlood == 0 || flood < smallestFlood {
+			smallestFlood = flood
+		}
 		d[move] = (float32(flood) * float32(flood))
 	}
 	d.Normalize()
-	name, val := d.Max()
-	if floodResults[name] < 5 {
-		weight = 0.1
-	} else if floodResults[name] < 15 {
+	name, _ := d.Max()
+	if smallestFlood < 5 {
+		weight = 10
+	} else if smallestFlood < 15 {
+		weight = 5
+	} else if smallestFlood < 40 {
 		weight = 0.5
-	} else if floodResults[name] < 40 {
-		weight = 1.0
 	} else {
-		weight = 1.5
+		weight = 0.2
 	}
-	log.Printf("Flood fill recommends [%s] at strength [%f]\n", name, val)
+	if len(gi.Snakes) == 1 {
+		weight *= 3
+	}
+	log.Printf("Flood fill recommends [%s], weight[%f]\n", name, weight)
+
+	return d, weight
+}
+
+func MoveFloodFillNarrow(s *snake, gi *GameInstance) (Directions, float32) {
+	floodResults := make(map[string]int)
+	d := NewDirections()
+	smallestFlood := 0
+	var weight float32 = 0.6
+	for move := range s.SafeMoves {
+		visited := make(map[Coord]bool)
+		nextCoord := MoveCoordinate[move](s.Head)
+		flood := FloodFill(nextCoord, gi, 5, visited)
+		floodResults[move] = flood
+		if smallestFlood == 0 || flood < smallestFlood {
+			smallestFlood = flood
+		}
+		d[move] = (float32(flood) * float32(flood))
+	}
+	d.Normalize()
+	name, _ := d.Max()
+	if smallestFlood < 5 {
+		weight = 10
+	} else if smallestFlood < 10 {
+		weight = 3
+	} else if smallestFlood < 15 {
+		weight = 1
+	} else {
+		weight = 0.5
+	}
+	if len(gi.Snakes) == 1 {
+		weight *= 1.5
+	}
+	log.Printf("Flood fill recommends [%s], weight[%f]\n", name, weight)
 
 	return d, weight
 }
 
 func MoveToClosestFood(s *snake, gi *GameInstance) (Directions, float32) {
 	d := NewDirections()
-	var weight float32 = 0.8
+	var weight float32 = 1.0
 	modified := map[string]bool{"up": false, "left": false, "right": false, "down": false}
 	type foodPath struct {
 		distance int
@@ -63,7 +104,13 @@ func MoveToClosestFood(s *snake, gi *GameInstance) (Directions, float32) {
 	}
 	foodPaths := make([]foodPath, 0)
 
+foodLoop:
 	for _, foodPos := range gi.Food {
+		for _, otherSnakes := range gi.Snakes {
+			if ManhattanDistance(otherSnakes.Head, foodPos) < 3 && ManhattanDistance(*s.Head, foodPos) > 3 {
+				continue foodLoop
+			}
+		}
 		paths := GetAStar(*s.Head, foodPos, gi)
 		for _, p := range paths {
 			distance := len(p)
@@ -103,12 +150,24 @@ func MoveToClosestFood(s *snake, gi *GameInstance) (Directions, float32) {
 	d.Modified(modified)
 	d.Normalize()
 
-	if len(foodPaths) > 0 && IsClosestToFood(*s.Head, foodPaths[0].foodPos, gi) {
-		weight = 1.5
+	if s.Length > LongestEnemy(gi).Length {
+		weight *= 0.5
 	}
 
-	name, val := d.Max()
-	log.Printf("MoveToClosestFood: [%s] strength [%f]\n", name, val)
+	if len(foodPaths) > 0 && IsClosestToFood(*s.Head, foodPaths[0].foodPos, gi) {
+		weight *= 3
+	}
+
+	if s.Data.Health > 60 {
+		weight *= 0.8
+	} else if s.Data.Health > 30 {
+		weight *= 1
+	} else {
+		weight *= 1.5
+	}
+
+	name, _ := d.Max()
+	log.Printf("MoveToClosestFood: [%s] weight [%f]\n", name, weight)
 	return d, weight
 }
 func MoveBackwards(s *snake, gi *GameInstance) (Directions, float32) {
@@ -152,41 +211,97 @@ func MoveOntoSnake(s *snake, gi *GameInstance) (Directions, float32) {
 	return d, weight
 }
 
-func MoveHeadToHeadCollision(s *snake, gi *GameInstance) (Directions, float32) {
+func MoveHeadtoHeadSafety(s *snake, gi *GameInstance) (Directions, float32) {
 	d := NewDirections()
 	var weight float32 = 1.0
+dirLoop:
+	for dir := range d {
+		nextCoord := MoveCoordinate[dir](s.Head)
+		for _, otherSnake := range gi.Snakes {
+			for _, snakeDirection := range GetNeighbors(otherSnake.Head, gi) {
+				if nextCoord == snakeDirection && s.Length <= otherSnake.Length {
+					d[dir] = 0
+					continue dirLoop
+				}
+			}
+		}
+	}
+	logUnsafe("collision: ", d)
+	return d, weight
+}
+
+func MoveHeadToHeadCollision(s *snake, gi *GameInstance) (Directions, float32) {
+	d := NewDirections()
+	var weight float32 = 0.0
 	modified := map[string]bool{"up": false, "left": false, "right": false, "down": false}
 
 	for move := range s.SafeMoves {
 		nextCoord := MoveCoordinate[move](s.Head)
-		collisionWeight := float32(1.0)
-
+		var nextCoordWeight float32 = 0.2
 		for _, otherSnake := range gi.Snakes {
-			if otherSnake.ID == gi.You.ID {
-				continue
+			if nextCoordWeight == 0 {
+				break
 			}
-
-			for _, otherDir := range []string{"up", "down", "left", "right"} {
-				otherNextCoord := MoveCoordinate[otherDir](&otherSnake.Head)
-
-				if nextCoord == otherNextCoord {
-					if s.Length > otherSnake.Length {
-						collisionWeight = 2.0
-						weight = 0.8
-					} else if s.Length < otherSnake.Length {
-						collisionWeight = 0.1
+			for _, snakeDirection := range GetNeighbors(otherSnake.Head, gi) {
+				if nextCoord == snakeDirection {
+					if s.Length <= otherSnake.Length {
+						nextCoordWeight = 0
 						weight = 1.0
+						break
 					} else {
-						collisionWeight = 0.3
-						weight = 0.9
+						nextCoordWeight = 5
+
 					}
 				}
 			}
 		}
-
-		d[move] = collisionWeight
-		if collisionWeight != 1.0 {
+		d[move] = nextCoordWeight
+		if nextCoordWeight != float32(0.2) {
 			modified[move] = true
+		}
+	}
+
+	d.Normalize()
+
+	name, _ := d.Max()
+	log.Printf("MoveHeadToHeadCollision: [%s], weight [%f]\n", name, weight)
+	return d, weight
+}
+
+func MoveTowardEdges(s *snake, gi *GameInstance) (Directions, float32) {
+	d := NewDirections()
+	var weight float32 = 5
+	modified := map[string]bool{"up": false, "left": false, "right": false, "down": false}
+
+	edgeThreshold := 0 // How close to edge counts as "at edge"
+
+	for move := range s.SafeMoves {
+		nextCoord := MoveCoordinate[move](s.Head)
+
+		// Check if we're at or moving to an edge
+		isAtEdge := (nextCoord.X <= edgeThreshold || nextCoord.X >= gi.Bounds.X-1-edgeThreshold ||
+			nextCoord.Y <= edgeThreshold || nextCoord.Y >= gi.Bounds.Y-1-edgeThreshold)
+
+		if isAtEdge {
+			d[move] = 1.5 // Strong preference for edge positions
+			modified[move] = true
+		} else {
+			// Distance-based scoring for non-edge positions
+			// Closer to edge = higher score
+			distToNearestEdge := nextCoord.X
+			if gi.Bounds.X-1-nextCoord.X < distToNearestEdge {
+				distToNearestEdge = gi.Bounds.X - 1 - nextCoord.X
+			}
+			if nextCoord.Y < distToNearestEdge {
+				distToNearestEdge = nextCoord.Y
+			}
+			if gi.Bounds.Y-1-nextCoord.Y < distToNearestEdge {
+				distToNearestEdge = gi.Bounds.Y - 1 - nextCoord.Y
+			}
+
+			// Inverse scoring: closer to edge = higher score
+			edgeScore := 1.0 / (1.0 + float32(distToNearestEdge)*0.5)
+			d[move] = edgeScore
 		}
 	}
 
@@ -194,6 +309,52 @@ func MoveHeadToHeadCollision(s *snake, gi *GameInstance) (Directions, float32) {
 	d.Normalize()
 
 	name, val := d.Max()
-	log.Printf("MoveHeadToHeadCollision: [%s] strength [%f]\n", name, val)
+	log.Printf("MoveTowardEdges: [%s] strength [%f]\n", name, val)
+	return d, weight
+}
+
+func MoveCondense(s *snake, gi *GameInstance) (Directions, float32) {
+	d := NewDirections()
+	var weight float32 = 0.6
+	modified := map[string]bool{"up": false, "left": false, "right": false, "down": false}
+
+	// Get the direction from head to neck (direction we came from)
+	neckDir := "up"
+	if s.Head.X > s.Neck.X {
+		neckDir = "left"
+	} else if s.Head.X < s.Neck.X {
+		neckDir = "right"
+	} else if s.Head.Y > s.Neck.Y {
+		neckDir = "down"
+	}
+
+	// Get perpendicular directions (parallel to body)
+	perpendicularDirs := []string{}
+	if neckDir == "up" || neckDir == "down" {
+		perpendicularDirs = []string{"left", "right"}
+	} else {
+		perpendicularDirs = []string{"up", "down"}
+	}
+
+	// Score moves that move parallel to body (condensing)
+	for move := range s.SafeMoves {
+		condenseScore := float32(0.8) // Default lower score
+
+		for _, perpDir := range perpendicularDirs {
+			if move == perpDir {
+				condenseScore = 1.2 // Prefer parallel moves
+				modified[move] = true
+				break
+			}
+		}
+
+		d[move] = condenseScore
+	}
+
+	d.Modified(modified)
+	d.Normalize()
+
+	name, val := d.Max()
+	log.Printf("MoveCondense: [%s] strength [%f]\n", name, val)
 	return d, weight
 }

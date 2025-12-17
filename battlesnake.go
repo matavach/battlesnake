@@ -1,6 +1,9 @@
 package main
 
-import "log"
+import (
+	"log"
+	"time"
+)
 
 type Config struct {
 	Port       string
@@ -12,7 +15,7 @@ var turn int
 func main() {
 	turn = 0
 	c := Config{
-		Port: "8000",
+		Port: "1234",
 	}
 	Run(&c)
 }
@@ -22,9 +25,9 @@ func info() BattlesnakeInfoResponse {
 	return BattlesnakeInfoResponse{
 		APIVersion: "1",
 		Author:     "ematijevich",
-		Color:      "#808080",
-		Head:       "default",
-		Tail:       "default",
+		Color:      "#BB9AF7",
+		Head:       "replit-mark",
+		Tail:       "replit-notmark",
 	}
 }
 
@@ -38,6 +41,7 @@ func end(gs *GameState) {
 }
 
 func move(gs *GameState) BattlesnakeMoveResponse {
+	defer LogExecutionTime("Total Response Time:", time.Now())
 	log.Printf("TURN %d:\n", gs.Turn)
 	response := BattlesnakeMoveResponse{}
 	gi := NewGameInstace(gs)

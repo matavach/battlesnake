@@ -14,10 +14,21 @@ func NewGameInstace(gs *GameState) GameInstance {
 	return GameInstance{
 		Bounds: Coord{gs.Board.Width, gs.Board.Height},
 		Board:  NewGameBoard(gs),
-		Snakes: gs.Board.Snakes,
+		Snakes: GetEnemySnakes(gs),
 		Food:   gs.Board.Food,
 		You:    gs.You,
 	}
+}
+
+func GetEnemySnakes(gs *GameState) []Battlesnake {
+	snakes := make([]Battlesnake, 0, len(gs.Board.Snakes)-1)
+	for _, s := range gs.Board.Snakes {
+		if s.ID == gs.You.ID {
+			continue
+		}
+		snakes = append(snakes, s)
+	}
+	return snakes
 }
 
 func NewGameBoard(gs *GameState) GameBoard {

@@ -31,9 +31,11 @@ func NewSnake(bs *Battlesnake) (snake, error) {
 			MoveBackwards,
 			MoveOntoSnake,
 			MoveWithinBoard,
+			MoveHeadtoHeadSafety,
 		},
 		SecondLevel: []MoveCheck{
-			MoveFloodFill,
+			MoveFloodFillWide,
+			MoveFloodFillNarrow,
 			MoveToClosestFood,
 			MoveHeadToHeadCollision,
 		},
@@ -43,6 +45,12 @@ func NewSnake(bs *Battlesnake) (snake, error) {
 
 func (s *snake) findSecondLevelMoves(gi *GameInstance) {
 	defer LogExecutionTime("Second Level Moves:", time.Now())
+	if len(gi.Snakes) < 3 {
+		s.SecondLevel = append(s.SecondLevel, MoveCondense)
+	}
+	if len(gi.Snakes) == 1 {
+		s.SecondLevel = append(s.SecondLevel, MoveTowardEdges)
+	}
 
 	dirCh := make(chan MoveResult, len(s.SecondLevel))
 
@@ -64,18 +72,28 @@ func (s *snake) findSecondLevelMoves(gi *GameInstance) {
 		var sum float32
 		var weightSum float32
 		for _, result := range results {
-			if result.result[dirName] == 0 {
-				d[dirName] = 0
-				break
-			}
+			// if result.weight == 0 {
+			// 	log.Printf("result for direction [%s] has weight 0, skipping", dirName)
+			// 	continue
+			// }
+			// if result.result[dirName] == 0 {
+			// 	d[dirName] = 0
+			// 	log.Printf("result for direction [%s] is 0, breaking", dirName)
+			// 	continue
+			// }
 			sum += result.result[dirName] * result.weight
 			weightSum += result.weight
 		}
 		if d[dirName] != 0 {
 			d[dirName] = sum / weightSum
 		}
-	}
 
+	}
+	log.Println("Processed directions:")
+	log.Printf("    up: %f\n", d["up"])
+	log.Printf("  down: %f\n", d["down"])
+	log.Printf("  left: %f\n", d["left"])
+	log.Printf(" right: %f\n", d["right"])
 	dirName, str := d.Max()
 	s.NextMove = dirName
 	log.Printf("Next move: '%s' with strength: '%f'", s.NextMove, str)

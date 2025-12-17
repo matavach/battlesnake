@@ -70,7 +70,7 @@ func (d Directions) RemoveUnsafe() {
 func (d Directions) Modified(m map[string]bool) {
 	for move := range d {
 		if !m[move] {
-			d[move] = 0
+			delete(d, move)
 		}
 	}
 }
