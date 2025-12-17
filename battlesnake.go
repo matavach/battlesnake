@@ -15,7 +15,7 @@ var turn int
 func main() {
 	turn = 0
 	c := Config{
-		Port: "1234",
+		Port: "8000",
 	}
 	Run(&c)
 }
@@ -27,7 +27,7 @@ func info() BattlesnakeInfoResponse {
 		Author:     "ematijevich",
 		Color:      "#BB9AF7",
 		Head:       "replit-mark",
-		Tail:       "replit-notmark",
+		Tail:       "block-bum",
 	}
 }
 
